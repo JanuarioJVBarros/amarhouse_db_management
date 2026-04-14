@@ -9,7 +9,7 @@ class ContentAPI:
         name,
         slug,
         description,
-        description_2="",
+        description_full="",
         other_information="",
         featured=False,
         main_collection_id=None,
@@ -39,7 +39,7 @@ class ContentAPI:
                         "slug": slug,
                         "description": description,
                         "customFields": {
-                            "description_2": description_2,
+                            "description_2": description_full,
                             "other_information": other_information
                         }
                     }

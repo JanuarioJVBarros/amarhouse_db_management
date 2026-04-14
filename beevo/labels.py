@@ -33,11 +33,11 @@ class LabelsAPI:
     
     def add_labels_to_product(self, product_id, facet_value_ids):
         query = """
-        mutation UpdateProduct($input: UpdateProductInput!) {
-          updateProduct(input: $input) {
-            id
-          }
-        }
+            mutation UpdateProduct($input: UpdateProductInput!) {
+                updateProduct(input: $input) {
+                    id
+                }
+                }
         """
 
         variables = {

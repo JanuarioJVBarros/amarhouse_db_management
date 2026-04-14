@@ -1,10 +1,15 @@
+import time
+
+from beevo.client import BeevoClient
 from beevo.product import ProductAPI
 from beevo.options import OptionsAPI
 from beevo.variants import VariantsAPI
 from beevo.assets import AssetsAPI
 from beevo.labels import LabelsAPI
 from beevo.content import ContentAPI
+from utils import json_utils
 
+from types import SimpleNamespace
 
 class ProductPublisher:
     """
@@ -36,8 +41,10 @@ class ProductPublisher:
         # ===================================================
         # 1. PRODUCT (IDEMPOTENT)
         # ===================================================
-        product_id = self._get_or_create_product(product)
-
+        product_id, variant_id = self._get_or_create_product(product)
+        if not product_id:
+            print(f"RESULT: [SKIP] Product already exists with correct SKU and price: {product.slug}")
+            return
         # ===================================================
         # 2. OPTION GROUPS
         # ===================================================
@@ -61,7 +68,7 @@ class ProductPublisher:
         # ===================================================
         # 6. CONTENT (DESCRIPTION + CMS FIELDS)
         # ===================================================
-        self._update_content(product, product_id)
+        #self._update_content(product, product_id)
 
         # ===================================================
         # FINAL RESULT
@@ -83,15 +90,37 @@ class ProductPublisher:
         existing = self.product_api.get_by_slug(product.slug)
 
         if existing:
-            print(f"[SKIP] Product already exists: {product.slug}")
-            return existing["id"]
+            # ensure that sku and price matches the expected
+            variant_list = self.product_api.get_product_variants_by_sku(product.sku)
+            if variant_list:
+                variant_id = variant_list[0]["id"]
+                self.product_api.update_sku(variant_id, product.sku)
+                self.product_api.update_price(variant_id, product.price)
+                #return existing["id"], variant_id
+                return None, None
+            print(f"RESULT: [SKIP] Product already exists: {product.slug}")
+            return existing["id"], None
 
-        created = self.product_api.create_product(
-            name=product.name,
-            slug=product.slug
-        )
+        product_data = {"name": product.name, 
+                        "slug": product.slug, 
+                        "description": product.description, 
+                        "description_full": product.description_full,
+                        "price": product.price,
+                        "sku": product.sku
+                        }
+        
+        created = self.product_api.create_product(product_data)
 
-        return created["createProduct"]["id"]
+        product_id = created["data"]["createProduct"]["id"]
+        response = self.product_api.create_first_variant(product_id, product_data)
+        print(response)
+        if response:
+            variant_id = response["data"]["createProductVariants"][0]["id"]
+        else:
+            variant_id = None
+        print(f"RESULT: [DONE] Create product: {product.slug}")
+
+        return product_id, variant_id
 
     # ---------------------------------------------------
     # 2. OPTION GROUPS
@@ -157,31 +186,19 @@ class ProductPublisher:
 
         asset_ids = []
 
-        for img in getattr(product, "images", []):
+        for img_url in getattr(product, "images", []):
 
-            asset_id = self.assets_api.upload_asset(img.path)
+            asset_id = self.assets_api.upload_asset(img_url)
             asset_ids.append(asset_id)
 
         if not asset_ids:
+            print(f"RESULT: [SKIP] No assets found")
             return
 
-        self.client.request(
-            """
-            mutation UpdateProduct($input: UpdateProductInput!) {
-              updateProduct(input: $input) {
-                id
-              }
-            }
-            """,
-            variables={
-                "input": {
-                    "id": product_id,
-                    "assetIds": asset_ids,
-                    "featuredAssetId": asset_ids[0]
-                }
-            },
-            operation_name="UpdateProduct"
-        )
+        response = self.assets_api.update_product_assets(product_id, asset_ids=asset_ids)
+        response = self.assets_api.set_asset_as_featured(product_id, asset_ids[0])
+        
+        print(f"RESULT: [DONE] Assets uploaded")
 
     # ---------------------------------------------------
     # 5. LABELS (FACETS)
@@ -192,11 +209,11 @@ class ProductPublisher:
 
         facet_values = getattr(product, "facet_value_ids", [])
 
-        if facet_values:
-            self.labels_api.add_labels_to_product(
-                product_id,
-                facet_values
-            )
+        #if facet_values:
+        self.labels_api.add_labels_to_product(
+            product_id,
+            ["92", "89", "90", "91"]
+        )
 
     # ---------------------------------------------------
     # 6. CONTENT
@@ -218,3 +235,17 @@ class ProductPublisher:
             related_products_ids=getattr(product, "related_products_ids", None),
             google_id_id=getattr(product, "google_id_id", None)
         )
+
+
+if __name__ == "__main__":
+    client = BeevoClient()
+    publisher = ProductPublisher(client)
+
+    scraped_products = json_utils.load_json("scraped_products copy.json")
+
+    print("\n=== PUBLISH RESULT ===")
+
+    for product in scraped_products:
+        product = SimpleNamespace(**product)
+        result = publisher.publish(product)
+        time.sleep(1)

@@ -1,47 +1,72 @@
 from config.settings import Settings
 from config.headers import build_headers
 import requests
-
+import json
 
 class BeevoClient:
-    def __init__(self, url=None, token=None, cookie=None, language=None):
-        self.url = url or Settings.BEEVO_URL
-        self.language = language or Settings.LANGUAGE_CODE
-
-        self.headers = build_headers(
-            token=token or Settings.BEEVO_TOKEN,
-            cookie=cookie or Settings.BEEVO_COOKIE
-        )
+    def __init__(self):
+        self.base_url = Settings.BEEVO_URL
 
     def request(self, query, variables=None, operation_name=None):
+        url = self.base_url
+
+        headers = {
+            "content-type": "application/json",
+            "accept": "*/*",
+            "origin": "https://amarhouse.beevo.com",
+            "referer": "https://amarhouse.beevo.com/admin-api?languageCode=pt_PT",
+            "apollo-require-preflight": "true",
+            "cookie": "locale=pt_PT; beevo-admin=eyJ0b2tlbiI6IjJkMDAyODkxOWRjM2Q0ZWE4OGRkMzQ0NzE0OTRmYWIzZGNiY2RiMTViYzZhNDA5ZjU1NzVmNjEyYTk0MWFjODUifQ==; beevo-admin.sig=uE7aVkWmaR5X_ov1JsoyzOd4BW8",
+            "user-agent": "Mozilla/5.0"
+        }
+
         payload = {
             "query": query,
             "variables": variables or {},
+            "operationName": operation_name,
         }
 
-        if operation_name:
-            payload["operationName"] = operation_name
+        response = requests.post(
+            url,
+            headers=headers,
+            json=payload
+        )
 
-        response = requests.post(self.url, json=payload, headers=self.headers)
+        # Debug output
+        # print("\nURL:", url)
+        # print("\nHEADERS:", headers)
+        # print("\nPAYLOAD:", payload)
 
-        if not response.ok:
-            raise Exception(f"HTTP Error {response.status_code}: {response.text}")
+        try:
+            response.raise_for_status()
+        except Exception as e:
+            print("\nHTTP ERROR:")
+            print(response.text)
+            raise e
 
         data = response.json()
 
         if "errors" in data:
-            raise Exception(f"GraphQL Error: {data['errors']}")
+            print("\nGRAPHQL ERROR:")
+            print(json.dumps(data, indent=2, ensure_ascii=False))
 
-        return data["data"]
+        return data
 
     def request_multipart(self, files):
+
+        headers = {
+            "accept": "*/*",
+            "origin": "https://amarhouse.beevo.com",
+            "referer": "https://amarhouse.beevo.com/admin-api?languageCode=pt_PT",
+            "apollo-require-preflight": "true",
+            "cookie": "locale=pt_PT; beevo-admin=eyJ0b2tlbiI6IjJkMDAyODkxOWRjM2Q0ZWE4OGRkMzQ0NzE0OTRmYWIzZGNiY2RiMTViYzZhNDA5ZjU1NzVmNjEyYTk0MWFjODUifQ==; beevo-admin.sig=uE7aVkWmaR5X_ov1JsoyzOd4BW8",
+            "user-agent": "Mozilla/5.0"
+        }
+                
         response = requests.post(
-            self.url,
+            self.base_url,
+            headers=headers,
             files=files,
-            headers={
-                "beeevo-token": self.headers.get("beeevo-token"),
-                "cookie": self.headers.get("cookie"),
-            }
         )
 
         if not response.ok:
@@ -53,3 +78,28 @@ class BeevoClient:
             raise Exception(f"GraphQL Upload Error: {data['errors']}")
 
         return data
+    
+
+# DEBUG
+if __name__ == "__main__":
+    client = BeevoClient()
+
+    query = """
+            query {
+            products {
+                items {
+                id
+                name
+                slug
+                }
+            }
+            }
+    """
+
+    #variables={"id": "1"}
+
+    response = client.request(query, variables={}, operation_name=None)
+
+    print(response)
+
+
