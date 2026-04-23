@@ -1,102 +1,96 @@
-from config.headers import build_headers
+from beevo.config import BEEVO_URL, BEEVO_COOKIE
 import requests
 import json
 
 class BeevoClient:
-    def __init__(self):
-        self.base_url = Settings.BEEVO_URL
+    def __init__(self, base_url=BEEVO_URL, beevo_cookie=BEEVO_COOKIE):
+        self.base_url = base_url
+        self.beevo_cookie = beevo_cookie
 
-    def request(self, query, variables=None, operation_name=None):
-        url = self.base_url
-
-        headers = {
-            "content-type": "application/json",
-            "accept": "*/*",
-            "origin": "https://amarhouse.beevo.com",
-            "referer": "https://amarhouse.beevo.com/admin-api?languageCode=pt_PT",
-            "apollo-require-preflight": "true",
-            "user-agent": "Mozilla/5.0"
-        }
-
+    def request(self, query, variables=None, operation_name=None, expected_status=200):
         payload = {
             "query": query,
             "variables": variables or {},
             "operationName": operation_name,
         }
 
+        headers = {
+            "content-type": "application/json",
+            "accept": "*/*",
+            "origin": "https://amarhouse.beevo.com",
+            "referer": "https://amarhouse.beevo.com/admin-api?languageCode=pt_PT",
+            "cookie": self.beevo_cookie,
+            "apollo-require-preflight": "true",
+            "user-agent": "Mozilla/5.0"
+        }
+
         response = requests.post(
-            url,
+            self.base_url,
             headers=headers,
             json=payload
         )
 
-        # Debug output
-        # print("\nURL:", url)
-        # print("\nHEADERS:", headers)
-        # print("\nPAYLOAD:", payload)
+        # -------------------------
+        # STATUS CODE VALIDATION
+        # -------------------------
+        assert response.status_code == expected_status, (
+            f"Unexpected status code: "
+            f"{response.status_code} (expected {expected_status})\n"
+            f"Response: {response.text}"
+        )
 
+        # -------------------------
+        # PARSE RESPONSE
+        # -------------------------
         try:
-            response.raise_for_status()
-        except Exception as e:
-            print("\nHTTP ERROR:")
-            print(response.text)
-            raise e
+            data = response.json()
+        except Exception:
+            raise AssertionError(f"Response is not valid JSON:\n{response.text}")
 
-        data = response.json()
-
+        # -------------------------
+        # GRAPHQL ERROR CHECK
+        # -------------------------
         if "errors" in data:
-            print("\nGRAPHQL ERROR:")
-            print(json.dumps(data, indent=2, ensure_ascii=False))
+            raise AssertionError(
+                "GraphQL errors detected:\n"
+                f"{json.dumps(data['errors'], indent=2)}"
+            )
 
         return data
 
-    def request_multipart(self, files):
+    # -------------------------
+    # MULTIPART REQUEST
+    # -------------------------
+    def request_multipart(self, files, expected_status=200):
 
         headers = {
             "accept": "*/*",
             "origin": "https://amarhouse.beevo.com",
             "referer": "https://amarhouse.beevo.com/admin-api?languageCode=pt_PT",
             "apollo-require-preflight": "true",
-            "user-agent": "Mozilla/5.0"
+            "user-agent": "Mozilla/5.0",
+            "cookie": self.beevo_cookie
         }
-                
+
         response = requests.post(
             self.base_url,
             headers=headers,
             files=files,
         )
 
-        if not response.ok:
-            raise Exception(f"Upload Error {response.status_code}: {response.text}")
+        # STATUS VALIDATION
+        assert response.status_code == expected_status, (
+            f"Unexpected upload status: {response.status_code}"
+        )
 
-        data = response.json()
+        try:
+            data = response.json()
+        except Exception:
+            raise AssertionError(f"Upload response is not JSON:\n{response.text}")
 
         if "errors" in data:
-            raise Exception(f"GraphQL Upload Error: {data['errors']}")
+            raise AssertionError(
+                f"GraphQL upload errors:\n{json.dumps(data['errors'], indent=2)}"
+            )
 
         return data
-    
-
-# DEBUG
-if __name__ == "__main__":
-    client = BeevoClient()
-
-    query = """
-            query {
-            products {
-                items {
-                id
-                name
-                slug
-                }
-            }
-            }
-    """
-
-    #variables={"id": "1"}
-
-    response = client.request(query, variables={}, operation_name=None)
-
-    print(response)
-
-

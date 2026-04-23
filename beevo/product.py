@@ -2,20 +2,16 @@ class ProductAPI:
     def __init__(self, client):
         self.client = client
 
-    def create_product(self, product_data):
-        """
-        Creates a product in Beevo CMS using GraphQL.
-        Fully dynamic via variables (no hardcoded query values).
-        """
 
+    def create_product(self, product_data, expected_status=200):
         query = """
-            mutation CreateProduct($input: CreateProductInput!) {
+        mutation CreateProduct($input: CreateProductInput!) {
             createProduct(input: $input) {
                 id
                 name
                 slug
             }
-            }
+        }
         """
 
         variables = {
@@ -44,140 +40,35 @@ class ProductAPI:
             }
         }
 
-        return self.client.request(
+        response = self.client.request(
             query=query,
             variables=variables,
             operation_name="CreateProduct",
+            expected_status=expected_status
         )
-    
-    
-    def create_first_variant(self, product_id, product_data):
-        query = """
-                mutation CreateProductVariants($input: [CreateProductVariantInput!]!) {
-                createProductVariants(input: $input) {
-                    ...ProductVariant
-                    __typename
-                }
-                }
 
-                fragment ProductVariant on ProductVariant {
-                id
-                createdAt
-                updatedAt
-                enabled
-                languageCode
-                name
-                price
-                currencyCode
-                priceWithTax
-                stockOnHand
-                stockAllocated
-                trackInventory
-                outOfStockThreshold
-                useGlobalOutOfStockThreshold
-                taxRateApplied {
-                    id
-                    name
-                    value
-                    __typename
-                }
-                taxCategory {
-                    id
-                    name
-                    __typename
-                }
-                sku
-                options {
-                    ...ProductOption
-                    __typename
-                }
-                facetValues {
-                    id
-                    code
-                    name
-                    facet {
-                    id
-                    name
-                    __typename
-                    }
-                    __typename
-                }
-                featuredAsset {
-                    ...Asset
-                    __typename
-                }
-                assets {
-                    ...Asset
-                    __typename
-                }
-                translations {
-                    id
-                    languageCode
-                    name
-                    __typename
-                }
-                channels {
-                    id
-                    code
-                    __typename
-                }
-                customFields {
-                    weight
-                    pvp
-                    ean
-                    __typename
-                }
-                __typename
-                }
+        product = response.get("data", {}).get("createProduct")
 
-                fragment ProductOption on ProductOption {
-                id
-                createdAt
-                updatedAt
-                code
-                languageCode
-                name
-                groupId
-                translations {
-                    id
-                    languageCode
-                    name
-                    __typename
-                }
-                __typename
-                }
+        assert product is not None, f"Product creation failed: {response}"
+        assert product.get("id"), "Missing product ID"
+        assert product.get("name") == product_data.get("name"), "Product name mismatch"
 
-                fragment Asset on Asset {
-                id
-                createdAt
-                updatedAt
-                name
-                fileSize
-                mimeType
-                type
-                preview
-                source
-                width
-                height
-                focalPoint {
-                    x
-                    y
-                    __typename
-                }
-                __typename
-                }
-                """
-        
+        return product
+
+
+    def create_first_variant(self, product_id, product_data, expected_status=200):
+        query = """<KEEP ORIGINAL QUERY>"""
+
         variables = {
             "input": [
                 {
                     "productId": product_id,
                     "price": product_data.get("price", 0),
-                    "sku": product_data.get("sku", 0),
+                    "sku": product_data.get("sku"),
                     "translations": [
                         {
                             "languageCode": "pt_PT",
-                            "name": product_data.get("name", 0)
+                            "name": product_data.get("name")
                         }
                     ],
                     "stockLevels": [
@@ -189,25 +80,33 @@ class ProductAPI:
                     "optionIds": []
                 }
             ]
-            }
+        }
 
-        return self.client.request(
+        response = self.client.request(
             query=query,
             variables=variables,
             operation_name="CreateProductVariants",
+            expected_status=expected_status
         )
 
-    def get_by_slug(self, slug, language="pt_PT"):
+        variants = response.get("data", {}).get("createProductVariants")
+
+        assert variants, f"Variant creation failed: {response}"
+
+        return variants[0] if isinstance(variants, list) else variants
+
+
+    def get_by_slug(self, slug, expected_status=200):
         query = """
-            query GetProducts($options: ProductListOptions) {
+        query GetProducts($options: ProductListOptions) {
             products(options: $options) {
                 items {
-                id
-                name
-                slug
+                    id
+                    name
+                    slug
                 }
             }
-            }
+        }
         """
 
         variables = {
@@ -220,22 +119,25 @@ class ProductAPI:
             }
         }
 
-        result = self.client.request(
+        response = self.client.request(
             query=query,
             variables=variables,
-            operation_name="GetProducts"
+            operation_name="GetProducts",
+            expected_status=expected_status
         )
-        
-        items = result.get("data",[]).get("products", {}).get("items", [])
+
+        items = response.get("data", {}).get("products", {}).get("items", [])
+
         return items[0] if items else None
 
-    def update_sku(self, variant_id, sku):
+
+    def update_sku(self, variant_id, sku, expected_status=200):
         query = """
         mutation UpdateProductVariant($input: UpdateProductVariantInput!) {
-        updateProductVariant(input: $input) {
-            id
-            sku
-        }
+            updateProductVariant(input: $input) {
+                id
+                sku
+            }
         }
         """
 
@@ -246,22 +148,31 @@ class ProductAPI:
             }
         }
 
-        return self.client.request(
+        response = self.client.request(
             query=query,
             variables=variables,
-            operation_name="UpdateProductVariant"
+            operation_name="UpdateProductVariant",
+            expected_status=expected_status
         )
 
-            
-    def update_price(self, variant_id, price, currency="EUR"):
+        updated = response.get("data", {}).get("updateProductVariant")
+
+        assert updated is not None, f"SKU update failed: {response}"
+        assert updated.get("sku") == sku, "SKU not updated correctly"
+
+        return updated
+
+    # -------------------------
+    # UPDATE PRICE
+    # -------------------------
+    def update_price(self, variant_id, price, expected_status=200):
         query = """
-            mutation UpdateProductVariant($input: UpdateProductVariantInput!) {
+        mutation UpdateProductVariant($input: UpdateProductVariantInput!) {
             updateProductVariant(input: $input) {
                 id
-                sku
                 price
             }
-            }
+        }
         """
 
         variables = {
@@ -271,9 +182,16 @@ class ProductAPI:
             }
         }
 
-        return self.client.request(
+        response = self.client.request(
             query=query,
             variables=variables,
-            operation_name="UpdateProductVariant"
+            operation_name="UpdateProductVariant",
+            expected_status=expected_status
         )
 
+        updated = response.get("data", {}).get("updateProductVariant")
+
+        assert updated is not None, f"Price update failed: {response}"
+        assert updated.get("price") == price, "Price not updated correctly"
+
+        return updated

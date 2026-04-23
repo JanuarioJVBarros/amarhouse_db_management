@@ -6,7 +6,6 @@ from beevo.options import OptionsAPI
 from beevo.variants import VariantsAPI
 from beevo.assets import AssetsAPI
 from beevo.labels import LabelsAPI
-from beevo.content import ContentAPI
 from utils import json_utils
 
 from types import SimpleNamespace
@@ -25,7 +24,6 @@ class ProductPublisher:
         self.variants_api = VariantsAPI(client)
         self.assets_api = AssetsAPI(client)
         self.labels_api = LabelsAPI(client)
-        self.content_api = ContentAPI(client)
 
     # ---------------------------------------------------
     # MAIN ENTRY POINT

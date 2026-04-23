@@ -3,17 +3,21 @@ import json
 import requests
 import tempfile
 
+
 class AssetsAPI:
     def __init__(self, client):
         self.client = client
 
-    def upload_asset(self, image_url):
+
+    def upload_asset(self, image_url, expected_status=200):
         """
-        Downloads an image from a URL and uploads it to Beevo as an asset.
-        Returns the asset ID.
+        Downloads an image from a URL and uploads it as an asset.
+        Returns asset ID.
         """
 
-        # 1. Download image from URL
+        # -------------------------
+        # DOWNLOAD IMAGE
+        # -------------------------
         resp = requests.get(image_url, stream=True)
         resp.raise_for_status()
 
@@ -21,7 +25,6 @@ class AssetsAPI:
         extension = content_type.split("/")[-1].split(";")[0]
 
         tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=f".{extension}")
-
         file_path = tmp_file.name
 
         try:
@@ -31,22 +34,21 @@ class AssetsAPI:
             tmp_file.close()
 
             query = """
-                    mutation CreateAssets($input: [CreateAssetInput!]!) {
-                    createAssets(input: $input) {
-                        ... on Asset {
+            mutation CreateAssets($input: [CreateAssetInput!]!) {
+                createAssets(input: $input) {
+                    ... on Asset {
                         id
                         name
                         fileSize
                         mimeType
                         preview
                         source
-                        }
-
-                        ... on ErrorResult {
+                    }
+                    ... on ErrorResult {
                         message
-                        }
                     }
-                    }
+                }
+            }
             """
 
             operations = {
@@ -63,7 +65,9 @@ class AssetsAPI:
                 "1": ["variables.input.0.file"]
             }
 
-            # 3. Upload via multipart (IMPORTANT: file handle)
+            # -------------------------
+            # MULTIPART UPLOAD
+            # -------------------------
             with open(file_path, "rb") as file_handle:
                 files = {
                     "operations": (None, json.dumps(operations), "application/json"),
@@ -73,41 +77,46 @@ class AssetsAPI:
 
                 response = self.client.request_multipart(files)
 
-            asset = response["data"]["createAssets"][0]
+            # -------------------------
+            # VALIDATION
+            # -------------------------
+            assets = response.get("data", {}).get("createAssets", [])
 
-            if asset.get("id"):
-                return asset["id"]
+            assert assets, f"Asset upload failed: {response}"
 
-            raise Exception(f"Upload failed: {asset}")
+            asset = assets[0]
+
+            assert asset.get("id"), f"Missing asset ID: {asset}"
+
+            return asset["id"]
 
         finally:
-            # 4. cleanup temp file
+            # -------------------------
+            # CLEANUP
+            # -------------------------
             try:
                 os.unlink(file_path)
             except Exception:
                 pass
 
-    def update_product_assets(self, product_id, asset_ids):
-        """
-        Attaches uploaded assets to a product
-        """
 
+    def update_product_assets(self, product_id, asset_ids, expected_status=200):
         query = """
-            mutation UpdateProduct($input: UpdateProductInput!) {
+        mutation UpdateProduct($input: UpdateProductInput!) {
             updateProduct(input: $input) {
                 id
                 name
                 slug
                 assets {
-                id
-                preview
+                    id
+                    preview
                 }
                 featuredAsset {
-                id
-                preview
+                    id
+                    preview
                 }
             }
-            }
+        }
         """
 
         variables = {
@@ -117,28 +126,37 @@ class AssetsAPI:
             }
         }
 
-        return self.client.request(
+        response = self.client.request(
             query=query,
             variables=variables,
-            operation_name="UpdateProduct"
+            operation_name="UpdateProduct",
+            expected_status=expected_status
         )
-    
-    def set_asset_as_featured(self, product_id, asset_id):
+
+        updated = response.get("data", {}).get("updateProduct")
+
+        assert updated is not None, f"Asset update failed: {response}"
+        assert "assets" in updated, "Missing assets in response"
+
+        return updated
+
+ 
+    def set_asset_as_featured(self, product_id, asset_id, expected_status=200):
         query = """
-            mutation UpdateProduct($input: UpdateProductInput!) {
+        mutation UpdateProduct($input: UpdateProductInput!) {
             updateProduct(input: $input) {
                 id
                 name
                 featuredAsset {
-                id
-                preview
+                    id
+                    preview
                 }
                 assets {
-                id
-                preview
+                    id
+                    preview
                 }
             }
-            }
+        }
         """
 
         variables = {
@@ -147,10 +165,17 @@ class AssetsAPI:
                 "featuredAssetId": asset_id
             }
         }
-        
-        
-        return self.client.request(
+
+        response = self.client.request(
             query=query,
             variables=variables,
-            operation_name="UpdateProduct"
+            operation_name="UpdateProduct",
+            expected_status=expected_status
         )
+
+        updated = response.get("data", {}).get("updateProduct")
+
+        assert updated is not None, f"Setting featured asset failed: {response}"
+        assert updated.get("featuredAsset"), "Featured asset not set"
+
+        return updated

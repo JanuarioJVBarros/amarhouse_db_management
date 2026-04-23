@@ -2,23 +2,29 @@ class VariantsAPI:
     def __init__(self, client):
         self.client = client
 
-    def create_variant(self, product_id, name, sku, price, stock, option_ids, language="pt_PT"):
-        """
-        Creates a product variant linked to a product + options.
-        Ensure option_ids are correctly mapped to the options created in the option groups step.
-        """
 
+    def create_variant(
+        self,
+        product_id,
+        name,
+        sku,
+        price,
+        stock,
+        option_ids,
+        language="pt_PT",
+        expected_status=200
+    ):
         query = """
         mutation CreateProductVariants($input: [CreateProductVariantInput!]!) {
-        createProductVariants(input: $input) {
-            id
-            sku
-            price
-            options {
-            code
-            name
+            createProductVariants(input: $input) {
+                id
+                sku
+                price
+                options {
+                    code
+                    name
+                }
             }
-        }
         }
         """
 
@@ -46,27 +52,36 @@ class VariantsAPI:
             ]
         }
 
-        return self.client.request(
+        response = self.client.request(
             query=query,
             variables=variables,
-            operation_name="CreateProductVariants"
+            operation_name="CreateProductVariants",
+            expected_status=expected_status
         )
-    
-    def get_product_variants_by_sku(self, sku):
-        """
-        Fetch product variants filtered by SKU.
-        """
 
+        variants = response.get("data", {}).get("createProductVariants")
+
+        assert variants, f"Variant creation failed: {response}"
+
+        variant = variants[0] if isinstance(variants, list) else variants
+
+        assert variant.get("sku") == sku, "SKU mismatch after creation"
+        assert variant.get("price") == price, "Price mismatch after creation"
+
+        return variant
+
+
+    def get_product_variants_by_sku(self, sku, expected_status=200):
         query = """
         query GetProductVariants($options: ProductVariantListOptions) {
-        productVariants(options: $options) {
-            items {
-            id
-            name
-            sku
-            price
+            productVariants(options: $options) {
+                items {
+                    id
+                    name
+                    sku
+                    price
+                }
             }
-        }
         }
         """
 
@@ -83,7 +98,12 @@ class VariantsAPI:
         response = self.client.request(
             query=query,
             variables=variables,
-            operation_name="GetProductVariants"
+            operation_name="GetProductVariants",
+            expected_status=expected_status
         )
 
-        return response["data"]["productVariants"]["items"]
+        items = response.get("data", {}).get("productVariants", {}).get("items", [])
+
+        assert isinstance(items, list), "Invalid response structure for variants list"
+
+        return items
