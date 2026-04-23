@@ -1,4 +1,4 @@
-from beevo.config import BEEVO_URL, BEEVO_COOKIE
+from beevo.config.config import BEEVO_URL, BEEVO_COOKIE
 import requests
 import json
 

@@ -1,6 +1,6 @@
 from urllib.parse import urlparse
 from .parser import GolmarParser
-from .models import ScrapedProduct
+from ..models import ScrapedProduct
 
 
 class GolmarExtractor:
