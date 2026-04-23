@@ -1,4 +1,3 @@
-from config.settings import Settings
 from config.headers import build_headers
 import requests
 import json
@@ -16,7 +15,6 @@ class BeevoClient:
             "origin": "https://amarhouse.beevo.com",
             "referer": "https://amarhouse.beevo.com/admin-api?languageCode=pt_PT",
             "apollo-require-preflight": "true",
-            "cookie": "locale=pt_PT; beevo-admin=eyJ0b2tlbiI6IjJkMDAyODkxOWRjM2Q0ZWE4OGRkMzQ0NzE0OTRmYWIzZGNiY2RiMTViYzZhNDA5ZjU1NzVmNjEyYTk0MWFjODUifQ==; beevo-admin.sig=uE7aVkWmaR5X_ov1JsoyzOd4BW8",
             "user-agent": "Mozilla/5.0"
         }
 
@@ -59,7 +57,6 @@ class BeevoClient:
             "origin": "https://amarhouse.beevo.com",
             "referer": "https://amarhouse.beevo.com/admin-api?languageCode=pt_PT",
             "apollo-require-preflight": "true",
-            "cookie": "locale=pt_PT; beevo-admin=eyJ0b2tlbiI6IjJkMDAyODkxOWRjM2Q0ZWE4OGRkMzQ0NzE0OTRmYWIzZGNiY2RiMTViYzZhNDA5ZjU1NzVmNjEyYTk0MWFjODUifQ==; beevo-admin.sig=uE7aVkWmaR5X_ov1JsoyzOd4BW8",
             "user-agent": "Mozilla/5.0"
         }
                 

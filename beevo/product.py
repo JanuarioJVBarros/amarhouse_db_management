@@ -1,9 +1,3 @@
-import json
-
-class ProductAPI:
-    def __init__(self, client):
-        self.client = client
-
 class ProductAPI:
     def __init__(self, client):
         self.client = client
@@ -234,42 +228,6 @@ class ProductAPI:
         
         items = result.get("data",[]).get("products", {}).get("items", [])
         return items[0] if items else None
-    
-    def get_product_variants_by_sku(self, sku):
-        """
-        Fetch product variants filtered by SKU.
-        """
-
-        query = """
-        query GetProductVariants($options: ProductVariantListOptions) {
-        productVariants(options: $options) {
-            items {
-            id
-            name
-            sku
-            price
-            }
-        }
-        }
-        """
-
-        variables = {
-            "options": {
-                "filter": {
-                    "sku": {
-                        "eq": sku
-                    }
-                }
-            }
-        }
-
-        response = self.client.request(
-            query=query,
-            variables=variables,
-            operation_name="GetProductVariants"
-        )
-
-        return response["data"]["productVariants"]["items"]
 
     def update_sku(self, variant_id, sku):
         query = """
