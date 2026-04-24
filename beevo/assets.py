@@ -3,6 +3,9 @@ import json
 import requests
 import tempfile
 
+from beevo.exceptions import BeevoValidationError
+from beevo.validation import require_list, require_mapping, require_path
+
 
 class AssetsAPI:
     def __init__(self, client):
@@ -80,13 +83,18 @@ class AssetsAPI:
             # -------------------------
             # VALIDATION
             # -------------------------
-            assets = response.get("data", {}).get("createAssets", [])
+            assets = require_list(
+                require_path(response, ["data", "createAssets"], "upload_asset response"),
+                "upload_asset response.data.createAssets",
+            )
 
-            assert assets, f"Asset upload failed: {response}"
+            if not assets:
+                raise BeevoValidationError("Asset upload returned an empty list")
 
-            asset = assets[0]
+            asset = require_mapping(assets[0], "upload_asset first asset")
 
-            assert asset.get("id"), f"Missing asset ID: {asset}"
+            if not asset.get("id"):
+                raise BeevoValidationError(f"Missing asset ID: {asset}")
 
             return asset["id"]
 
@@ -133,10 +141,13 @@ class AssetsAPI:
             expected_status=expected_status
         )
 
-        updated = response.get("data", {}).get("updateProduct")
+        updated = require_mapping(
+            require_path(response, ["data", "updateProduct"], "update_product_assets response"),
+            "update_product_assets response.data.updateProduct",
+        )
 
-        assert updated is not None, f"Asset update failed: {response}"
-        assert "assets" in updated, "Missing assets in response"
+        if "assets" not in updated:
+            raise BeevoValidationError("Missing assets in response")
 
         return updated
 
@@ -173,9 +184,12 @@ class AssetsAPI:
             expected_status=expected_status
         )
 
-        updated = response.get("data", {}).get("updateProduct")
+        updated = require_mapping(
+            require_path(response, ["data", "updateProduct"], "set_asset_as_featured response"),
+            "set_asset_as_featured response.data.updateProduct",
+        )
 
-        assert updated is not None, f"Setting featured asset failed: {response}"
-        assert updated.get("featuredAsset"), "Featured asset not set"
+        if not updated.get("featuredAsset"):
+            raise BeevoValidationError("Featured asset not set")
 
         return updated

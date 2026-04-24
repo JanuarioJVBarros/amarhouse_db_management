@@ -1,9 +1,14 @@
+from beevo.exceptions import BeevoValidationError
+from beevo.validation import require_list, require_mapping, require_path
+
+
 class ProductAPI:
     def __init__(self, client):
         self.client = client
 
 
     def create_product(self, product_data, expected_status=200):
+        product_data = require_mapping(product_data, "product_data")
         query = """
         mutation CreateProduct($input: CreateProductInput!) {
             createProduct(input: $input) {
@@ -47,17 +52,31 @@ class ProductAPI:
             expected_status=expected_status
         )
 
-        product = response.get("data", {}).get("createProduct")
+        product = require_mapping(
+            require_path(response, ["data", "createProduct"], "create_product response"),
+            "create_product response.data.createProduct",
+        )
 
-        assert product is not None, f"Product creation failed: {response}"
-        assert product.get("id"), "Missing product ID"
-        assert product.get("name") == product_data.get("name"), "Product name mismatch"
+        if not product.get("id"):
+            raise BeevoValidationError("Product creation response is missing product id")
+
+        if product.get("name") != product_data.get("name"):
+            raise BeevoValidationError("Product name mismatch after creation")
 
         return product
 
 
     def create_first_variant(self, product_id, product_data, expected_status=200):
-        query = """<KEEP ORIGINAL QUERY>"""
+        product_data = require_mapping(product_data, "product_data")
+        query = """
+        mutation CreateProductVariants($input: [CreateProductVariantInput!]!) {
+            createProductVariants(input: $input) {
+                id
+                sku
+                price
+            }
+        }
+        """
 
         variables = {
             "input": [
@@ -89,11 +108,15 @@ class ProductAPI:
             expected_status=expected_status
         )
 
-        variants = response.get("data", {}).get("createProductVariants")
+        variants = require_list(
+            require_path(response, ["data", "createProductVariants"], "create_first_variant response"),
+            "create_first_variant response.data.createProductVariants",
+        )
 
-        assert variants, f"Variant creation failed: {response}"
+        if not variants:
+            raise BeevoValidationError("Variant creation returned an empty list")
 
-        return variants[0] if isinstance(variants, list) else variants
+        return require_mapping(variants[0], "create_first_variant first variant")
 
 
     def get_by_slug(self, slug, expected_status=200):
@@ -126,7 +149,10 @@ class ProductAPI:
             expected_status=expected_status
         )
 
-        items = response.get("data", {}).get("products", {}).get("items", [])
+        items = require_list(
+            require_path(response, ["data", "products", "items"], "get_by_slug response"),
+            "get_by_slug response.data.products.items",
+        )
 
         return items[0] if items else None
 
@@ -155,10 +181,13 @@ class ProductAPI:
             expected_status=expected_status
         )
 
-        updated = response.get("data", {}).get("updateProductVariant")
+        updated = require_mapping(
+            require_path(response, ["data", "updateProductVariant"], "update_sku response"),
+            "update_sku response.data.updateProductVariant",
+        )
 
-        assert updated is not None, f"SKU update failed: {response}"
-        assert updated.get("sku") == sku, "SKU not updated correctly"
+        if updated.get("sku") != sku:
+            raise BeevoValidationError("SKU not updated correctly")
 
         return updated
 
@@ -189,9 +218,12 @@ class ProductAPI:
             expected_status=expected_status
         )
 
-        updated = response.get("data", {}).get("updateProductVariant")
+        updated = require_mapping(
+            require_path(response, ["data", "updateProductVariant"], "update_price response"),
+            "update_price response.data.updateProductVariant",
+        )
 
-        assert updated is not None, f"Price update failed: {response}"
-        assert updated.get("price") == price, "Price not updated correctly"
+        if updated.get("price") != price:
+            raise BeevoValidationError("Price not updated correctly")
 
         return updated

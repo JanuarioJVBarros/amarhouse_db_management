@@ -1,11 +1,10 @@
 from urllib.parse import urlparse
 from .parser import GolmarParser
-from ..models import ScrapedProduct
+from scrapers.base import build_scraped_product
 
 
 class GolmarExtractor:
-
-    def extract(self, html: str, url: str) -> ScrapedProduct:
+    def extract(self, html: str, url: str):
         parser = GolmarParser(html)
 
         # NAME
@@ -37,7 +36,7 @@ class GolmarExtractor:
         for el in parser.soup.select(".articles-sidebar-selection li"):
             labels.append(el.get_text(" ", strip=True))
 
-        return ScrapedProduct(
+        return build_scraped_product(
             name=name,
             slug=slug,
             description=description,
@@ -47,5 +46,6 @@ class GolmarExtractor:
             sku=sku,
             images=images,
             labels=labels,
-            source_url=url
+            source_url=url,
+            supplier="golmar",
         )

@@ -1,12 +1,12 @@
 from urllib.parse import urlparse, urljoin
 from typing import List
 
+from scrapers.base import build_scraped_product, slugify
 from .parser import EfapelParser
 from ..models import ScrapedProduct
 
 
 class EfapelExtractor:
-
     def extract(self, html: str, url: str) -> List[ScrapedProduct]:
         parser = EfapelParser(html)
         extracted_products = []
@@ -16,7 +16,7 @@ class EfapelExtractor:
         for row in rows:
             if row.find("th"):
                 continue
-            extracted_products.extend(self.parse_products_from_row(row))
+            extracted_products.extend(self.parse_products_from_row(row, url))
 
         return extracted_products
     
@@ -52,22 +52,20 @@ class EfapelExtractor:
 
         slug = urlparse(url).path.split("/")[-1]
 
-        return ScrapedProduct(
+        return build_scraped_product(
             name=name,
             slug=slug,
             description=description,
-            description_full=None,
-            price=None,
             reference=reference,
-            sku=None,
             images=[image] if image else [],
             labels=[side],  # "main" or "variant"
             source_url=url,
-            colors=colors
+            colors=colors,
+            supplier="efapel",
         )
     
-    def parse_products_from_row(self, row):
-        products = []
+    def parse_products_from_row(self, row, url):
+        products: List[ScrapedProduct] = []
 
         # get all inner product rows (left + right columns mixed)
         inner_rows = row.select("td.column table tr")
@@ -81,8 +79,7 @@ class EfapelExtractor:
                 continue
 
             name = name_el.get_text(strip=True)
-
-            slug = name.lower().replace(" ", "-")
+            slug = slugify(name)
 
             desc_el = tr.select_one("td:not(.ref):not(.color) p")
             description = desc_el.get_text(" ", strip=True) if desc_el else ""
@@ -94,6 +91,8 @@ class EfapelExtractor:
 
             image_el = tr.select_one("td.image img")
             image = image_el["src"] if image_el and image_el.get("src") else None
+            if image:
+                image = urljoin(url, image)
 
             color_variants = []
             for color in colors:
@@ -110,16 +109,17 @@ class EfapelExtractor:
                     "option": color,
                 })
 
-            main_product = {
-                "name": name,
-                "slug": slug,
-                "description": description,
-                "description_full": None,
-                "images": [image] if image else [],
-                "labels": ["127"],
-                "option_groups": [{'name': 'Cor', 'options': colors}],
-                "variants": color_variants
-            }
+            main_product = build_scraped_product(
+                name=name,
+                slug=slug,
+                description=description,
+                images=[image] if image else [],
+                labels=["127"],
+                option_groups=[{"name": "Cor", "options": colors}],
+                variants=color_variants,
+                source_url=url,
+                supplier="efapel",
+            )
             
             products.append(main_product)
         return products

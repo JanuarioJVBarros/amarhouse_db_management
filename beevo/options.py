@@ -1,6 +1,31 @@
+from beevo.exceptions import BeevoValidationError
+from beevo.validation import require_mapping, require_path
+
+
 class OptionsAPI:
     def __init__(self, client):
         self.client = client
+
+    def _build_option_payload(self, option, language):
+        if isinstance(option, dict):
+            name = option.get("name")
+            code = option.get("code") or str(name).strip().lower()
+        else:
+            name = str(option).strip()
+            code = name.lower()
+
+        if not name:
+            raise BeevoValidationError("Option name cannot be empty")
+
+        return {
+            "code": code,
+            "translations": [
+                {
+                    "languageCode": language,
+                    "name": name
+                }
+            ]
+        }
 
     # -------------------------
     # CREATE OPTION GROUP
@@ -9,6 +34,7 @@ class OptionsAPI:
         self,
         name,
         options,
+        code=None,
         language="pt_PT",
         expected_status=200
     ):
@@ -27,22 +53,14 @@ class OptionsAPI:
         }
         """
 
-        options_list = [
-            {
-                "code": element.lower(),
-                "translations": [
-                    {
-                        "languageCode": language,
-                        "name": element
-                    }
-                ]
-            }
-            for element in options
-        ]
+        if not name:
+            raise BeevoValidationError("Option group name cannot be empty")
+
+        options_list = [self._build_option_payload(element, language) for element in options]
 
         variables = {
             "input": {
-                "code": name.lower(),
+                "code": code or name.lower(),
                 "translations": [
                     {
                         "languageCode": language,
@@ -63,17 +81,18 @@ class OptionsAPI:
         # -------------------------
         # VALIDATION LAYER
         # -------------------------
-        created_group = response.get("data", {}).get("createProductOptionGroup")
-
-        assert created_group is not None, (
-            f"Option group creation failed. Full response:\n{response}"
+        created_group = require_mapping(
+            require_path(response, ["data", "createProductOptionGroup"], "create_option_group response"),
+            "create_option_group response.data.createProductOptionGroup",
         )
 
-        assert created_group.get("name") == name, (
-            f"Name mismatch: expected {name}, got {created_group.get('name')}"
-        )
+        if created_group.get("name") != name:
+            raise BeevoValidationError(
+                f"Name mismatch: expected {name}, got {created_group.get('name')}"
+            )
 
-        assert "id" in created_group, "Missing option group ID"
+        if "id" not in created_group:
+            raise BeevoValidationError("Missing option group ID")
 
         return created_group
 
@@ -114,16 +133,17 @@ class OptionsAPI:
         # -------------------------
         # VALIDATION LAYER
         # -------------------------
-        result = response.get("data", {}).get("addOptionGroupToProduct")
-
-        assert result is not None, (
-            f"Failed to add option group to product. Response:\n{response}"
+        result = require_mapping(
+            require_path(response, ["data", "addOptionGroupToProduct"], "add_option_group_to_product response"),
+            "add_option_group_to_product response.data.addOptionGroupToProduct",
         )
 
-        assert result.get("id") == product_id, (
-            f"Product ID mismatch: expected {product_id}, got {result.get('id')}"
-        )
+        if result.get("id") != product_id:
+            raise BeevoValidationError(
+                f"Product ID mismatch: expected {product_id}, got {result.get('id')}"
+            )
 
-        assert "optionGroups" in result, "Missing optionGroups field"
+        if "optionGroups" not in result:
+            raise BeevoValidationError("Missing optionGroups field")
 
         return result

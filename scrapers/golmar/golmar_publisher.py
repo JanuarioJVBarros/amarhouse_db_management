@@ -109,11 +109,11 @@ class ProductPublisher:
         
         created = self.product_api.create_product(product_data)
 
-        product_id = created["data"]["createProduct"]["id"]
+        product_id = created["id"]
         response = self.product_api.create_first_variant(product_id, product_data)
         print(response)
         if response:
-            variant_id = response["data"]["createProductVariants"][0]["id"]
+            variant_id = response["id"]
         else:
             variant_id = None
         print(f"RESULT: [DONE] Create product: {product.slug}")
@@ -140,7 +140,7 @@ class ProductPublisher:
                 ]
             )
 
-            group_id = result["createProductOptionGroup"]["id"]
+            group_id = result["id"]
 
             self.options_api.add_option_group_to_product(
                 product_id,
@@ -162,6 +162,7 @@ class ProductPublisher:
 
             self.variants_api.create_variant(
                 product_id=product_id,
+                name=variant.name,
                 sku=variant.sku,
                 price=variant.price,
                 stock=variant.stock,

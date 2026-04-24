@@ -1,6 +1,7 @@
 BASE_URL = "https://www.golmar.es"
 
 START_CATEGORY_URL = f"{BASE_URL}/products"
+START_URLS = [START_CATEGORY_URL]
 
 PRODUCT_URL_PREFIX = "/products/"
 

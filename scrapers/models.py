@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Optional, Dict, Any
 
 
@@ -14,10 +14,13 @@ class ScrapedProduct:
     reference: Optional[str] = None
     sku: Optional[str] = None
 
-    images: List[str] = None
-    labels: List[str] = None
+    images: List[str] = field(default_factory=list)
+    labels: List[str] = field(default_factory=list)
+    option_groups: List[Dict[str, Any]] = field(default_factory=list)
+    facet_value_ids: List[str] = field(default_factory=list)
 
     colors: Optional[str] = None
-    variants: List[Dict[str, Any]] = None
+    variants: List[Dict[str, Any]] = field(default_factory=list)
 
     source_url: Optional[str] = None
+    supplier: Optional[str] = None
