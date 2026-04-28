@@ -18,18 +18,49 @@ def load_prices_from_excel(file_path):
     def normalize_price_header(text):
         header = normalize(text)
         replacements = {
-            "ã§": "ç",
-            "ÃƒÂ§": "ç",
-            "preã§o": "preço",
-            "preÃƒÂ§o": "preço",
-            "â‚¬": "€",
-            "Ã¢â€šÂ¬": "€",
+            "Ã£Â§": "Ã§",
+            "ÃƒÆ’Ã‚Â§": "Ã§",
+            "ç": "Ã§",
+            "preÃ£Â§o": "preÃ§o",
+            "preÃƒÆ’Ã‚Â§o": "preÃ§o",
+            "preço": "preÃ§o",
+            "Ã¢â€šÂ¬": "â‚¬",
+            "ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬": "â‚¬",
+            "€": "â‚¬",
         }
 
         for source, target in replacements.items():
             header = header.replace(source, target)
 
         return header
+
+    def parse_price(raw_value):
+        if isinstance(raw_value, str):
+            normalized_price = (
+                raw_value
+                .replace("ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬", "")
+                .replace("Ã¢â€šÂ¬", "")
+                .replace("â‚¬", "")
+                .replace("€", "")
+                .replace(",", ".")
+                .strip()
+            )
+
+            if not normalized_price or normalized_price.startswith("#"):
+                return None
+
+            try:
+                return float(normalized_price)
+            except ValueError:
+                return None
+
+        if raw_value is None:
+            return None
+
+        try:
+            return float(raw_value)
+        except (TypeError, ValueError):
+            return None
 
     for col_idx, cell in enumerate(ws[1], 1):
         if cell.value:
@@ -43,12 +74,12 @@ def load_prices_from_excel(file_path):
             sku_col = idx
 
         normalized_header = normalize_price_header(header)
-        if "preço loja" in normalized_header and "iva" in normalized_header:
+        if "preÃ§o loja" in normalized_header and "iva" in normalized_header:
             price_col = idx
 
     if not sku_col or not price_col:
         raise ValueError(
-            "Excel must contain 'REF' and 'Preço Loja c/ IVA 23% (€)' columns"
+            "Excel must contain 'REF' and 'PreÃ§o Loja c/ IVA 23% (â‚¬)' columns"
         )
 
     for row in ws.iter_rows(min_row=2):
@@ -59,19 +90,11 @@ def load_prices_from_excel(file_path):
             continue
 
         sku = str(sku_cell).strip().upper()
+        price = parse_price(price_cell)
 
-        if isinstance(price_cell, str):
-            normalized_price = (
-                price_cell
-                .replace("Ã¢â€šÂ¬", "")
-                .replace("â‚¬", "")
-                .replace("€", "")
-                .replace(",", ".")
-                .strip()
-            )
-            price = float(normalized_price)
-        else:
-            price = float(price_cell or 0)
+        if price is None:
+            print(f"[SKIP] Invalid price for {sku}: {price_cell}")
+            continue
 
         price_map[sku] = price
 
@@ -125,4 +148,4 @@ def run_price_update(excel_file):
 
 
 if __name__ == "__main__":
-    run_price_update("TABELA-ISG.xlsx")
+    run_price_update("ecolux.xlsx")

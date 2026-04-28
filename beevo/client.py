@@ -36,6 +36,8 @@ class BeevoClient:
             raise BeevoConfigurationError("Request timeout must be greater than zero")
 
     def _build_headers(self):
+        # Beevo expects browser-like headers for some admin API operations.
+        # Keeping them centralized here avoids subtle drift between callers.
         return {
             "content-type": "application/json",
             "accept": "*/*",
@@ -60,6 +62,8 @@ class BeevoClient:
             raise BeevoResponseError(f"{context} response is not valid JSON:\n{response.text}") from exc
 
         if "errors" in data:
+            # GraphQL can return HTTP 200 with application-level failures, so
+            # callers should never treat "status code only" as success.
             raise BeevoResponseError(
                 f"{context} GraphQL errors detected:\n"
                 f"{json.dumps(data['errors'], indent=2)}"
@@ -90,9 +94,7 @@ class BeevoClient:
             context=operation_name or "Beevo request",
         )
 
-    # -------------------------
-    # MULTIPART REQUEST
-    # -------------------------
+
     def request_multipart(self, files, expected_status=200):
         try:
             response = self.session.post(

@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pytest
+import requests
 
 from beevo.assets import AssetsAPI
 from beevo.exceptions import BeevoValidationError
@@ -11,6 +12,8 @@ class DummyClient:
         self.response = response
         self.request_calls = []
         self.multipart_calls = []
+        self.session = self
+        self.timeout = 12
 
     def request(self, **kwargs):
         self.request_calls.append(kwargs)
@@ -19,6 +22,9 @@ class DummyClient:
     def request_multipart(self, files):
         self.multipart_calls.append(files)
         return self.response
+
+    def get(self, *args, **kwargs):
+        return requests.get(*args, **kwargs)
 
 
 class DummyDownloadResponse:
@@ -53,6 +59,29 @@ def test_upload_asset_downloads_and_returns_asset_id(monkeypatch, tmp_path):
     assert asset_id == "asset-1"
     assert client.multipart_calls, "Expected multipart upload to be used"
     assert removed_paths == ["upload.png"]
+
+
+def test_upload_asset_uses_client_timeout_and_session(monkeypatch, tmp_path):
+    client = DummyClient({"data": {"createAssets": [{"id": "asset-1"}]}})
+    api = AssetsAPI(client)
+    get_calls = []
+
+    def fake_get(url, **kwargs):
+        get_calls.append((url, kwargs))
+        return DummyDownloadResponse()
+
+    monkeypatch.setattr(client, "get", fake_get)
+
+    def fake_named_temporary_file(delete=False, suffix=""):
+        path = tmp_path / f"upload{suffix}"
+        return open(path, "w+b")
+
+    monkeypatch.setattr("beevo.assets.tempfile.NamedTemporaryFile", fake_named_temporary_file)
+    monkeypatch.setattr("beevo.assets.os.unlink", lambda path: None)
+
+    api.upload_asset("https://example.test/image.png")
+
+    assert get_calls == [("https://example.test/image.png", {"stream": True, "timeout": 12})]
 
 
 def test_upload_asset_raises_when_asset_id_is_missing(monkeypatch, tmp_path):

@@ -40,6 +40,40 @@ def test_load_prices_from_excel_reads_and_normalizes_values(tmp_path):
     assert result == {"ABC-1": 12.5, "XYZ-2": 3.75}
 
 
+def test_load_prices_from_excel_skips_excel_error_values(tmp_path, capsys):
+    file_path = tmp_path / "prices_with_errors.xlsx"
+    create_price_workbook(
+        file_path,
+        [
+            ["abc-1", "#VALUE!"],
+            ["xyz-2", "5,00 â‚¬"],
+        ],
+    )
+
+    result = load_prices_from_excel(file_path)
+
+    assert result == {"XYZ-2": 5.0}
+    output = capsys.readouterr().out
+    assert "[SKIP] Invalid price for ABC-1: #VALUE!" in output
+
+
+def test_load_prices_from_excel_skips_div_zero_values(tmp_path, capsys):
+    file_path = tmp_path / "prices_with_div_zero.xlsx"
+    create_price_workbook(
+        file_path,
+        [
+            ["abc-1", "#DIV/0!"],
+            ["xyz-2", "5,00 €"],
+        ],
+    )
+
+    result = load_prices_from_excel(file_path)
+
+    assert result == {"XYZ-2": 5.0}
+    output = capsys.readouterr().out
+    assert "[SKIP] Invalid price for ABC-1: #DIV/0!" in output
+
+
 def test_load_prices_from_excel_raises_for_missing_headers(tmp_path):
     workbook = Workbook()
     sheet = workbook.active

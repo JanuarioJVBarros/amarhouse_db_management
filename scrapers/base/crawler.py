@@ -10,6 +10,8 @@ class BaseCatalogCrawler(ABC):
         self.session = session or requests.Session()
 
     def fetch(self, url):
+        # All supplier crawlers route through this method so timeout behavior is
+        # consistent and easy to harden later with retries/backoff.
         response = self.session.get(url, timeout=self.timeout)
         response.raise_for_status()
         return response.text

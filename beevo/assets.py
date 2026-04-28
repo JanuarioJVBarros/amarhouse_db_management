@@ -11,30 +11,39 @@ class AssetsAPI:
     def __init__(self, client):
         self.client = client
 
-
     def upload_asset(self, image_url, expected_status=200):
         """
         Downloads an image from a URL and uploads it as an asset.
         Returns asset ID.
         """
+        if not image_url:
+            raise BeevoValidationError("Image URL is required for asset upload")
 
-        # -------------------------
-        # DOWNLOAD IMAGE
-        # -------------------------
-        resp = requests.get(image_url, stream=True)
-        resp.raise_for_status()
+        session = getattr(self.client, "session", requests)
+        timeout = getattr(self.client, "timeout", None)
+        request_kwargs = {"stream": True}
+        if timeout is not None:
+            request_kwargs["timeout"] = timeout
 
-        content_type = resp.headers.get("Content-Type", "image/jpeg")
-        extension = content_type.split("/")[-1].split(";")[0]
-
-        tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=f".{extension}")
-        file_path = tmp_file.name
+        # Reusing the Beevo client session keeps transport policy consistent
+        # across the repo and avoids introducing a second set of network
+        # defaults just for asset downloads.
+        resp = session.get(image_url, **request_kwargs)
+        file_path = None
 
         try:
-            for chunk in resp.iter_content(chunk_size=8192):
-                tmp_file.write(chunk)
+            resp.raise_for_status()
 
-            tmp_file.close()
+            content_type = resp.headers.get("Content-Type", "image/jpeg")
+            extension = content_type.split("/")[-1].split(";")[0]
+
+            with tempfile.NamedTemporaryFile(delete=False, suffix=f".{extension}") as tmp_file:
+                file_path = tmp_file.name
+                for chunk in resp.iter_content(chunk_size=8192):
+                    if chunk:
+                        # Iterating in chunks prevents large supplier images
+                        # from being buffered fully into memory.
+                        tmp_file.write(chunk)
 
             query = """
             mutation CreateAssets($input: [CreateAssetInput!]!) {
@@ -99,11 +108,16 @@ class AssetsAPI:
             return asset["id"]
 
         finally:
-            # -------------------------
-            # CLEANUP
-            # -------------------------
+            # We always try to release the network response and delete the
+            # temporary file, even when Beevo rejects the multipart upload.
             try:
-                os.unlink(file_path)
+                if hasattr(resp, "close"):
+                    resp.close()
+            except Exception:
+                pass
+            try:
+                if file_path:
+                    os.unlink(file_path)
             except Exception:
                 pass
 

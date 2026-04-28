@@ -127,6 +127,16 @@ class ProductAPI:
                     id
                     name
                     slug
+                    optionGroups {
+                        id
+                        code
+                        name
+                        options {
+                            id
+                            code
+                            name
+                        }
+                    }
                 }
             }
         }
